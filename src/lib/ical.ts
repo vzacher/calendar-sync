@@ -1,9 +1,19 @@
+export type EventType =
+  | "airbnb_guest"      // Valódi Airbnb foglalás (Reserved)
+  | "booking_guest"     // Valódi Booking.com foglalás (Booking.com CLOSED ami megjelenik Airbnb-n Not available-ként)
+  | "airbnb_sync"       // Airbnb foglalás szinkronizálva Booking.com-ra
+  | "manual_block"      // Manuális zárás (nincs párja a másik platformon)
+  | "unknown";
+
 export interface Booking {
   uid: string;
   summary: string;
   start: Date;
   end: Date;
   source: "airbnb" | "booking";
+  eventType: EventType;
+  reservationUrl?: string;
+  phoneLastFour?: string;
 }
 
 export interface Conflict {
@@ -11,19 +21,6 @@ export interface Conflict {
   bookingBooking: Booking;
   overlapStart: Date;
   overlapEnd: Date;
-}
-
-function parseICalDate(val: unknown): Date | null {
-  if (!val) return null;
-  if (val instanceof Date) return val;
-  if (typeof val === "object" && val !== null && "toJSDate" in val) {
-    try {
-      return (val as { toJSDate: () => Date }).toJSDate();
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 export async function fetchBookings(
@@ -40,8 +37,6 @@ export async function fetchBookings(
   }
 
   const icalText = await response.text();
-
-  // Parse iCal manually without external library for edge compatibility
   const bookings: Booking[] = [];
   const events = icalText.split("BEGIN:VEVENT");
 
@@ -52,6 +47,7 @@ export async function fetchBookings(
     const summaryMatch = event.match(/^SUMMARY:(.+)$/m);
     const dtStartMatch = event.match(/^DTSTART(?:;[^:]*)?:(.+)$/m);
     const dtEndMatch = event.match(/^DTEND(?:;[^:]*)?:(.+)$/m);
+    const descriptionMatch = event.match(/^DESCRIPTION:(.+)$/m);
 
     if (!dtStartMatch || !dtEndMatch) continue;
 
@@ -63,21 +59,103 @@ export async function fetchBookings(
 
     if (!start || !end) continue;
 
-    // Skip BLOCKED events (these are the blocks you create yourself, not real bookings from the other platform)
+    // Skip generic "Not available" or "Blocked" (not platform-specific)
     if (summary === "Not available" || summary === "Blocked") continue;
 
-    bookings.push({ uid, summary, start, end, source });
+    let reservationUrl: string | undefined;
+    let phoneLastFour: string | undefined;
+
+    if (descriptionMatch) {
+      const desc = descriptionMatch[1];
+      const urlMatch = desc.match(/Reservation URL: (https?:\/\/\S+)/);
+      const phoneMatch = desc.match(/Phone Number \(Last 4 Digits\): (\d{4})/);
+      if (urlMatch) reservationUrl = urlMatch[1].replace(/\\n.*/, "").trim();
+      if (phoneMatch) phoneLastFour = phoneMatch[1];
+    }
+
+    // Initial eventType — will be refined by classifyBookings()
+    let eventType: EventType = "unknown";
+    if (source === "airbnb" && summary === "Reserved") {
+      eventType = "airbnb_guest";
+    }
+
+    bookings.push({ uid, summary, start, end, source, eventType, reservationUrl, phoneLastFour });
   }
 
   return bookings;
 }
 
+// Cross-reference the two calendars to classify event types
+export function classifyBookings(
+  airbnbBookings: Booking[],
+  bookingBookings: Booking[]
+): { airbnb: Booking[]; booking: Booking[] } {
+  const classifiedAirbnb = airbnbBookings.map((a) => {
+    if (a.eventType === "airbnb_guest") return a;
+
+    // "Airbnb (Not available)" — check if it has a Booking.com counterpart
+    const hasBookingPair = bookingBookings.some((b) => datesOverlap(a, b));
+    return {
+      ...a,
+      eventType: hasBookingPair ? ("booking_guest" as EventType) : ("manual_block" as EventType),
+    };
+  });
+
+  const classifiedBooking = bookingBookings.map((b) => {
+    // Check if this Booking.com CLOSED matches an Airbnb Reserved
+    const hasAirbnbGuestPair = airbnbBookings.some(
+      (a) => a.eventType === "airbnb_guest" && datesOverlap(a, b)
+    );
+    if (hasAirbnbGuestPair) return { ...b, eventType: "airbnb_sync" as EventType };
+
+    // Check if it matches an Airbnb Not available (= real Booking.com guest)
+    const hasAirbnbBlockPair = airbnbBookings.some(
+      (a) => a.summary === "Airbnb (Not available)" && datesOverlap(a, b)
+    );
+    if (hasAirbnbBlockPair) return { ...b, eventType: "booking_guest" as EventType };
+
+    return { ...b, eventType: "manual_block" as EventType };
+  });
+
+  return { airbnb: classifiedAirbnb, booking: classifiedBooking };
+}
+
+function datesOverlap(a: Booking, b: Booking): boolean {
+  const aStart = a.start.getTime();
+  const aEnd = a.end.getTime();
+  const bStart = b.start.getTime();
+  const bEnd = b.end.getTime();
+  return aStart < bEnd && aEnd > bStart;
+}
+
+export function findConflicts(
+  airbnbBookings: Booking[],
+  bookingBookings: Booking[]
+): Conflict[] {
+  const conflicts: Conflict[] = [];
+
+  // Only real guests can conflict with each other
+  const realAirbnb = airbnbBookings.filter((a) => a.eventType === "airbnb_guest");
+  const realBooking = bookingBookings.filter((b) => b.eventType === "booking_guest");
+
+  for (const a of realAirbnb) {
+    for (const b of realBooking) {
+      const overlapStart = a.start > b.start ? a.start : b.start;
+      const overlapEnd = a.end < b.end ? a.end : b.end;
+
+      if (overlapStart < overlapEnd) {
+        conflicts.push({ airbnbBooking: a, bookingBooking: b, overlapStart, overlapEnd });
+      }
+    }
+  }
+
+  return conflicts;
+}
+
 function parseICalDateString(dateStr: string): Date | null {
-  // Format: 20240101 or 20240101T120000Z or 20240101T120000
   const clean = dateStr.replace(/[^\dTZ]/g, "");
 
   if (clean.length === 8) {
-    // Date only: YYYYMMDD
     const year = parseInt(clean.slice(0, 4));
     const month = parseInt(clean.slice(4, 6)) - 1;
     const day = parseInt(clean.slice(6, 8));
@@ -85,7 +163,6 @@ function parseICalDateString(dateStr: string): Date | null {
   }
 
   if (clean.length >= 15) {
-    // DateTime: YYYYMMDDTHHmmss[Z]
     const year = parseInt(clean.slice(0, 4));
     const month = parseInt(clean.slice(4, 6)) - 1;
     const day = parseInt(clean.slice(6, 8));
@@ -102,37 +179,20 @@ function parseICalDateString(dateStr: string): Date | null {
   return null;
 }
 
-export function findConflicts(
-  airbnbBookings: Booking[],
-  bookingBookings: Booking[]
-): Conflict[] {
-  const conflicts: Conflict[] = [];
-
-  for (const a of airbnbBookings) {
-    for (const b of bookingBookings) {
-      // Check overlap: a starts before b ends AND a ends after b starts
-      const overlapStart =
-        a.start > b.start ? a.start : b.start;
-      const overlapEnd = a.end < b.end ? a.end : b.end;
-
-      if (overlapStart < overlapEnd) {
-        conflicts.push({
-          airbnbBooking: a,
-          bookingBooking: b,
-          overlapStart,
-          overlapEnd,
-        });
-      }
-    }
-  }
-
-  return conflicts;
-}
-
 export function formatDate(date: Date): string {
   return date.toLocaleDateString("hu-HU", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+}
+
+export function eventTypeLabel(type: EventType): string {
+  switch (type) {
+    case "airbnb_guest": return "Airbnb vendég";
+    case "booking_guest": return "Booking.com vendég";
+    case "airbnb_sync": return "Airbnb szinkron (Airbnb foglalás lezárva)";
+    case "manual_block": return "Manuális zárás";
+    case "unknown": return "Ismeretlen";
+  }
 }

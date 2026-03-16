@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchBookings, findConflicts } from "@/lib/ical";
+import { fetchBookings, findConflicts, classifyBookings } from "@/lib/ical";
+import { getChangelog } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -20,14 +21,15 @@ export async function GET() {
   }
 
   try {
-    const [airbnbBookings, bookingBookings] = await Promise.all([
+    const [airbnbRaw, bookingRaw] = await Promise.all([
       fetchBookings(airbnbUrl, "airbnb"),
       fetchBookings(bookingUrl, "booking"),
     ]);
 
+    const { airbnb: airbnbBookings, booking: bookingBookings } = classifyBookings(airbnbRaw, bookingRaw);
     const conflicts = findConflicts(airbnbBookings, bookingBookings);
+    const changelog = await getChangelog();
 
-    // Csak a következő 6 hónap foglalásait küldjük vissza
     const now = new Date();
     const sixMonthsLater = new Date(now);
     sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
@@ -41,6 +43,9 @@ export async function GET() {
           start: b.start.toISOString(),
           end: b.end.toISOString(),
           source: b.source,
+          eventType: b.eventType,
+          reservationUrl: b.reservationUrl,
+          phoneLastFour: b.phoneLastFour,
         }));
 
     return NextResponse.json({
@@ -63,6 +68,7 @@ export async function GET() {
           end: c.bookingBooking.end.toISOString(),
         },
       })),
+      changelog: changelog.slice(0, 50),
       lastChecked: new Date().toISOString(),
     });
   } catch (error) {

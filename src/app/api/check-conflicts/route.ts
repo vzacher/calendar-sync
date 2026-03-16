@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchBookings, findConflicts, formatDate } from "@/lib/ical";
+import { fetchBookings, findConflicts, formatDate, classifyBookings } from "@/lib/ical";
+import { getSnapshot, saveSnapshot, addChangelogEntries, SnapshotEvent, ChangelogEntry } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
-  // Cron job biztonság: ellenőrizzük a titkos kulcsot
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    // Vercel cron job-ok is mehetnek authorization nélkül ha ugyanaz a project
     const isVercelCron = request.headers.get("x-vercel-cron") === "1";
     if (!isVercelCron) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -28,15 +27,74 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [airbnbBookings, bookingBookings] = await Promise.all([
+    const [airbnbRaw, bookingRaw] = await Promise.all([
       fetchBookings(airbnbUrl, "airbnb"),
       fetchBookings(bookingUrl, "booking"),
     ]);
 
+    const { airbnb: airbnbBookings, booking: bookingBookings } = classifyBookings(airbnbRaw, bookingRaw);
     const conflicts = findConflicts(airbnbBookings, bookingBookings);
 
+    // --- Változáskövetés ---
+    const currentEvents: SnapshotEvent[] = [
+      ...airbnbBookings.map((b) => ({
+        uid: b.uid,
+        summary: b.summary,
+        start: b.start.toISOString(),
+        end: b.end.toISOString(),
+        source: b.source,
+        eventType: b.eventType,
+      })),
+      ...bookingBookings.map((b) => ({
+        uid: b.uid,
+        summary: b.summary,
+        start: b.start.toISOString(),
+        end: b.end.toISOString(),
+        source: b.source,
+        eventType: b.eventType,
+      })),
+    ];
+
+    const previousSnapshot = await getSnapshot();
+    const previousUids = new Set(previousSnapshot.map((e) => e.uid));
+    const currentUids = new Set(currentEvents.map((e) => e.uid));
+
+    const changelogEntries: ChangelogEntry[] = [];
+    const now = new Date().toISOString();
+
+    // Új események
+    for (const event of currentEvents) {
+      if (!previousUids.has(event.uid)) {
+        changelogEntries.push({
+          timestamp: now,
+          type: "appeared",
+          platform: event.source,
+          eventType: event.eventType,
+          event: { uid: event.uid, summary: event.summary, start: event.start, end: event.end },
+        });
+      }
+    }
+
+    // Eltűnt események
+    for (const event of previousSnapshot) {
+      if (!currentUids.has(event.uid)) {
+        changelogEntries.push({
+          timestamp: now,
+          type: "disappeared",
+          platform: event.source,
+          eventType: event.eventType,
+          event: { uid: event.uid, summary: event.summary, start: event.start, end: event.end },
+        });
+      }
+    }
+
+    await Promise.all([
+      saveSnapshot(currentEvents),
+      addChangelogEntries(changelogEntries),
+    ]);
+    // --- Változáskövetés vége ---
+
     if (conflicts.length > 0) {
-      // SMS küldés Twilio-val
       const smsResult = await sendSmsAlert(conflicts);
 
       return NextResponse.json({
@@ -58,6 +116,7 @@ export async function GET(request: NextRequest) {
         })),
         smsSent: smsResult.success,
         smsError: smsResult.error,
+        changes: changelogEntries.length,
       });
     }
 
@@ -68,6 +127,7 @@ export async function GET(request: NextRequest) {
       checkedAt: new Date().toISOString(),
       airbnbBookingsCount: airbnbBookings.length,
       bookingBookingsCount: bookingBookings.length,
+      changes: changelogEntries.length,
     });
   } catch (error) {
     console.error("Hiba az ellenőrzés során:", error);
@@ -108,9 +168,7 @@ async function sendSmsAlert(
     `\n\nEllenőrizd azonnal a szálláshely foglalásait!`;
 
   try {
-    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString(
-      "base64"
-    );
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
 
     const response = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
@@ -130,9 +188,7 @@ async function sendSmsAlert(
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(
-        errorData.message || `Twilio hiba: ${response.status}`
-      );
+      throw new Error(errorData.message || `Twilio hiba: ${response.status}`);
     }
 
     return { success: true };
