@@ -1,8 +1,8 @@
 export type EventType =
   | "airbnb_guest"      // Valódi Airbnb foglalás (Reserved)
-  | "booking_guest"     // Valódi Booking.com foglalás (Booking.com CLOSED ami megjelenik Airbnb-n Not available-ként)
-  | "airbnb_sync"       // Airbnb foglalás szinkronizálva Booking.com-ra
-  | "manual_block"      // Manuális zárás (nincs párja a másik platformon)
+  | "booking_event"     // Booking.com esemény (foglalás vagy manuális zárás) — szinkronizálva Airbnb-re mint Not available
+  | "manual_block"      // Manuálisan zárolt Airbnb-n (nincs Booking.com párja)
+  | "sync_gap"          // Booking.com CLOSED, de Airbnb-n nincs megfelelő blokk — VESZÉLYES!
   | "unknown";
 
 export interface Booking {
@@ -91,30 +91,29 @@ export function classifyBookings(
   bookingBookings: Booking[]
 ): { airbnb: Booking[]; booking: Booking[] } {
   const classifiedAirbnb = airbnbBookings.map((a) => {
-    if (a.eventType === "airbnb_guest") return a;
+    // Valódi Airbnb foglalás — marad ahogy van
+    if (a.summary === "Reserved") return { ...a, eventType: "airbnb_guest" as EventType };
 
-    // "Airbnb (Not available)" — check if it has a Booking.com counterpart
+    // "Airbnb (Not available)" = Booking.com-ból szinkronizált esemény
+    // Ha van Booking.com párja → booking_event, ha nincs → manuális zárás Airbnb-n
     const hasBookingPair = bookingBookings.some((b) => datesOverlap(a, b));
     return {
       ...a,
-      eventType: hasBookingPair ? ("booking_guest" as EventType) : ("manual_block" as EventType),
+      eventType: hasBookingPair ? ("booking_event" as EventType) : ("manual_block" as EventType),
     };
   });
 
   const classifiedBooking = bookingBookings.map((b) => {
-    // Check if this Booking.com CLOSED matches an Airbnb Reserved
-    const hasAirbnbGuestPair = airbnbBookings.some(
-      (a) => a.eventType === "airbnb_guest" && datesOverlap(a, b)
-    );
-    if (hasAirbnbGuestPair) return { ...b, eventType: "airbnb_sync" as EventType };
-
-    // Check if it matches an Airbnb Not available (= real Booking.com guest)
-    const hasAirbnbBlockPair = airbnbBookings.some(
+    // Booking.com CLOSED-nak van Airbnb "Not available" párja?
+    // Ha igen → booking_event (Booking.com esemény ami szinkronizálódott Airbnb-re)
+    // Ha nincs → sync_gap VESZÉLY: Airbnb még nyitva van ezeken a napokon!
+    const hasAirbnbPair = airbnbBookings.some(
       (a) => a.summary === "Airbnb (Not available)" && datesOverlap(a, b)
     );
-    if (hasAirbnbBlockPair) return { ...b, eventType: "booking_guest" as EventType };
-
-    return { ...b, eventType: "manual_block" as EventType };
+    return {
+      ...b,
+      eventType: hasAirbnbPair ? ("booking_event" as EventType) : ("sync_gap" as EventType),
+    };
   });
 
   return { airbnb: classifiedAirbnb, booking: classifiedBooking };
@@ -134,9 +133,9 @@ export function findConflicts(
 ): Conflict[] {
   const conflicts: Conflict[] = [];
 
-  // Only real guests can conflict with each other
+  // Csak valódi vendégek ütközhetnek egymással
   const realAirbnb = airbnbBookings.filter((a) => a.eventType === "airbnb_guest");
-  const realBooking = bookingBookings.filter((b) => b.eventType === "booking_guest");
+  const realBooking = bookingBookings.filter((b) => b.eventType === "booking_event");
 
   for (const a of realAirbnb) {
     for (const b of realBooking) {
@@ -190,9 +189,9 @@ export function formatDate(date: Date): string {
 export function eventTypeLabel(type: EventType): string {
   switch (type) {
     case "airbnb_guest": return "Airbnb vendég";
-    case "booking_guest": return "Booking.com vendég";
-    case "airbnb_sync": return "Airbnb szinkron (Airbnb foglalás lezárva)";
-    case "manual_block": return "Manuális zárás";
+    case "booking_event": return "Booking.com esemény";
+    case "manual_block": return "Manuális zárás (Airbnb-n)";
+    case "sync_gap": return "⚠️ Szinkron hiány – Airbnb még nyitva!";
     case "unknown": return "Ismeretlen";
   }
 }

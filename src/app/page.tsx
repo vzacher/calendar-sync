@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-type EventType = "airbnb_guest" | "booking_guest" | "airbnb_sync" | "manual_block" | "unknown";
+type EventType = "airbnb_guest" | "booking_event" | "manual_block" | "sync_gap" | "unknown";
 
 interface BookingEntry {
   uid: string;
@@ -47,6 +47,7 @@ interface CalendarDay {
   airbnb: BookingEntry | null;
   booking: BookingEntry | null;
   isConflict: boolean;
+  isSyncGap: boolean;
   isToday: boolean;
   isCurrentMonth: boolean;
 }
@@ -91,7 +92,7 @@ function buildCalendarDays(year: number, month: number, data: CalendarData): Cal
 
   for (let i = 0; i < startDow; i++) {
     const d = new Date(year, month, -startDow + i + 1);
-    days.push({ date: d, airbnb: null, booking: null, isConflict: false, isToday: false, isCurrentMonth: false });
+    days.push({ date: d, airbnb: null, booking: null, isConflict: false, isSyncGap: false, isToday: false, isCurrentMonth: false });
   }
 
   for (let d = 1; d <= lastDay.getDate(); d++) {
@@ -109,13 +110,16 @@ function buildCalendarDays(year: number, month: number, data: CalendarData): Cal
       )
     );
 
-    days.push({ date, airbnb: airbnbBooking, booking: bookingBooking, isConflict, isToday, isCurrentMonth: true });
+    // Szinkron hiány: Booking.com-on CLOSED van, de Airbnb-n nincs semmi → Airbnb nyitva!
+    const isSyncGap = !isConflict && !!bookingBooking && bookingBooking.eventType === "sync_gap" && !airbnbBooking;
+
+    days.push({ date, airbnb: airbnbBooking, booking: bookingBooking, isConflict, isSyncGap, isToday, isCurrentMonth: true });
   }
 
   const remaining = 42 - days.length;
   for (let i = 1; i <= remaining; i++) {
     const d = new Date(year, month + 1, i);
-    days.push({ date: d, airbnb: null, booking: null, isConflict: false, isToday: false, isCurrentMonth: false });
+    days.push({ date: d, airbnb: null, booking: null, isConflict: false, isSyncGap: false, isToday: false, isCurrentMonth: false });
   }
 
   return days;
@@ -125,12 +129,12 @@ function eventTypeBadge(type: EventType) {
   switch (type) {
     case "airbnb_guest":
       return <span className="text-[9px] bg-rose-500 text-white rounded px-0.5">Vendég</span>;
-    case "booking_guest":
-      return <span className="text-[9px] bg-blue-500 text-white rounded px-0.5">Vendég</span>;
-    case "airbnb_sync":
-      return <span className="text-[9px] bg-orange-400 text-white rounded px-0.5">Szinkron</span>;
+    case "booking_event":
+      return <span className="text-[9px] bg-blue-500 text-white rounded px-0.5">Booking</span>;
     case "manual_block":
       return <span className="text-[9px] bg-gray-400 text-white rounded px-0.5">Manuális</span>;
+    case "sync_gap":
+      return <span className="text-[9px] bg-yellow-500 text-white rounded px-0.5">!</span>;
     default:
       return null;
   }
@@ -139,9 +143,9 @@ function eventTypeBadge(type: EventType) {
 function eventTypeLabel(type: string): string {
   switch (type) {
     case "airbnb_guest": return "Airbnb vendég";
-    case "booking_guest": return "Booking.com vendég";
-    case "airbnb_sync": return "Airbnb szinkron";
-    case "manual_block": return "Manuális zárás";
+    case "booking_event": return "Booking.com esemény";
+    case "manual_block": return "Manuális zárás (Airbnb-n)";
+    case "sync_gap": return "⚠️ Szinkron hiány – Airbnb még nyitva!";
     default: return "Ismeretlen";
   }
 }
@@ -390,8 +394,8 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-3 text-xs text-gray-600">
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-rose-500"></div>Airbnb vendég</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-500"></div>Booking vendég</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-400"></div>Airbnb szinkron (Airbnb lezár Booking-on)</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-400"></div>Manuális zárás</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-400"></div>Manuális zárás (Airbnb-n)</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-400"></div>⚠️ Szinkron hiány – Booking.com zárva, Airbnb nyitva!</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-500"></div>⚠️ Dupla foglalás</div>
             </div>
           </div>
@@ -425,6 +429,8 @@ export default function Dashboard() {
                     bgClass = "bg-gray-50";
                   } else if (day.isConflict) {
                     bgClass = "bg-red-500";
+                  } else if (day.isSyncGap) {
+                    bgClass = "bg-yellow-100 border-yellow-300";
                   } else if (hasAirbnb && hasBooking) {
                     bgClass = "bg-purple-100";
                   } else if (hasAirbnb) {
@@ -432,7 +438,7 @@ export default function Dashboard() {
                     bgClass = t === "airbnb_guest" ? "bg-rose-100" : t === "manual_block" ? "bg-gray-100" : "bg-rose-50";
                   } else if (hasBooking) {
                     const t = day.booking!.eventType;
-                    bgClass = t === "booking_guest" ? "bg-blue-100" : t === "airbnb_sync" ? "bg-orange-50" : "bg-gray-100";
+                    bgClass = t === "booking_event" ? "bg-blue-100" : t === "sync_gap" ? "bg-yellow-100" : "bg-gray-100";
                   }
 
                   return (
@@ -459,6 +465,7 @@ export default function Dashboard() {
                             </div>
                           )}
                           {day.isConflict && <div className="text-[9px] text-white font-bold">⚠️</div>}
+                          {day.isSyncGap && <div className="text-[9px] text-yellow-700 font-bold">!</div>}
                         </div>
                       )}
                     </div>
