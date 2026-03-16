@@ -1,0 +1,27 @@
+# env fájlok - SOHA ne kerüljön GitHubra!
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Next.js build output
+.next/
+out/
+
+# Node modules
+node_modules/
+
+# Vercel
+.vercel
+
+# OS fájlok
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+next-env.d.ts
