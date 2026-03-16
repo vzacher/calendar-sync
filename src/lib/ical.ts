@@ -104,12 +104,11 @@ export function classifyBookings(
   });
 
   const classifiedBooking = bookingBookings.map((b) => {
-    // Booking.com CLOSED-nak van Airbnb "Not available" párja?
-    // Ha igen → booking_event (Booking.com esemény ami szinkronizálódott Airbnb-re)
-    // Ha nincs → sync_gap VESZÉLY: Airbnb még nyitva van ezeken a napokon!
-    const hasAirbnbPair = airbnbBookings.some(
-      (a) => a.summary === "Airbnb (Not available)" && datesOverlap(a, b)
-    );
+    // Booking.com CLOSED párja lehet:
+    // 1. Airbnb "Not available" → Booking.com saját eseménye szinkronizálva Airbnb-re
+    // 2. Airbnb "Reserved" → Airbnb vendégfoglalás szinkronizálva Booking.com-ra
+    // Ha egyik sem → sync_gap VESZÉLY: Airbnb még nyitva van!
+    const hasAirbnbPair = airbnbBookings.some((a) => datesOverlap(a, b));
     return {
       ...b,
       eventType: hasAirbnbPair ? ("booking_event" as EventType) : ("sync_gap" as EventType),
