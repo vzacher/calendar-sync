@@ -494,9 +494,9 @@ export default function Dashboard() {
                 {selectedDay.airbnb ? (
                   <DayDetail booking={selectedDay.airbnb} platform="airbnb" />
                 ) : selectedDay.historicalAirbnb ? (
-                  <div className="text-sm space-y-1 opacity-50">
-                    <p className="font-medium text-gray-600 italic">{eventTypeLabel(selectedDay.historicalAirbnb.eventType)} (archív)</p>
-                    <p className="text-gray-400 text-xs">{formatDate(selectedDay.historicalAirbnb.start)} – {formatDate(selectedDay.historicalAirbnb.end)}</p>
+                  <div className="opacity-50">
+                    <DayDetail booking={{ ...selectedDay.historicalAirbnb, source: "airbnb", eventType: selectedDay.historicalAirbnb.eventType as EventType }} platform="airbnb" />
+                    <p className="text-xs text-gray-400 mt-1">archív</p>
                   </div>
                 ) : (
                   <DayDetail booking={null} platform="airbnb" />
@@ -507,9 +507,9 @@ export default function Dashboard() {
                 {selectedDay.booking ? (
                   <DayDetail booking={selectedDay.booking} platform="booking" hasAirbnbGuest={selectedDay.airbnb?.eventType === "airbnb_guest"} />
                 ) : selectedDay.historicalBooking ? (
-                  <div className="text-sm space-y-1 opacity-50">
-                    <p className="font-medium text-gray-600 italic">{eventTypeLabel(selectedDay.historicalBooking.eventType)} (archív)</p>
-                    <p className="text-gray-400 text-xs">{formatDate(selectedDay.historicalBooking.start)} – {formatDate(selectedDay.historicalBooking.end)}</p>
+                  <div className="opacity-50">
+                    <DayDetail booking={{ ...selectedDay.historicalBooking, source: "booking", eventType: selectedDay.historicalBooking.eventType as EventType }} platform="booking" />
+                    <p className="text-xs text-gray-400 mt-1">archív</p>
                   </div>
                 ) : (
                   <DayDetail booking={null} platform="booking" hasAirbnbGuest={selectedDay.airbnb?.eventType === "airbnb_guest"} />
