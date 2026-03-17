@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchBookings, findConflicts, classifyBookings } from "@/lib/ical";
-import { getChangelog } from "@/lib/redis";
+import { getChangelog, getHistory } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -28,7 +28,7 @@ export async function GET() {
 
     const { airbnb: airbnbBookings, booking: bookingBookings } = classifyBookings(airbnbRaw, bookingRaw);
     const conflicts = findConflicts(airbnbBookings, bookingBookings);
-    const changelog = await getChangelog();
+    const [changelog, history] = await Promise.all([getChangelog(), getHistory()]);
 
     const now = new Date();
     const sixMonthsLater = new Date(now);
@@ -69,6 +69,7 @@ export async function GET() {
         },
       })),
       changelog: changelog.slice(0, 50),
+      history: history.sort((a, b) => new Date(b.end).getTime() - new Date(a.end).getTime()).slice(0, 100),
       lastChecked: new Date().toISOString(),
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchBookings, findConflicts, formatDate, classifyBookings } from "@/lib/ical";
-import { getSnapshot, saveSnapshot, addChangelogEntries, SnapshotEvent, ChangelogEntry } from "@/lib/redis";
+import { getSnapshot, saveSnapshot, addChangelogEntries, addHistoryEvents, SnapshotEvent, ChangelogEntry, HistoryEvent } from "@/lib/redis";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -75,22 +75,52 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Eltűnt események
+    // Eltűnt események — megkülönböztetjük: múltba kerülő (history) vs. valóban eltűnt
+    const historyEvents: HistoryEvent[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     for (const event of previousSnapshot) {
       if (!currentUids.has(event.uid)) {
-        changelogEntries.push({
-          timestamp: now,
-          type: "disappeared",
-          platform: event.source,
-          eventType: event.eventType,
-          event: { uid: event.uid, summary: event.summary, start: event.start, end: event.end },
-        });
+        const endDate = new Date(event.end);
+        const isPast = endDate <= today;
+
+        if (isPast) {
+          // Múltba kerülő foglalás → permanens history-ba mentjük
+          historyEvents.push({
+            uid: event.uid,
+            summary: event.summary,
+            start: event.start,
+            end: event.end,
+            source: event.source,
+            eventType: event.eventType,
+            firstSeen: now,
+            lastSeen: now,
+          });
+          changelogEntries.push({
+            timestamp: now,
+            type: "completed",
+            platform: event.source,
+            eventType: event.eventType,
+            event: { uid: event.uid, summary: event.summary, start: event.start, end: event.end },
+          });
+        } else {
+          // Jövőbeli esemény tűnt el → valódi változás (pl. lemondás)
+          changelogEntries.push({
+            timestamp: now,
+            type: "disappeared",
+            platform: event.source,
+            eventType: event.eventType,
+            event: { uid: event.uid, summary: event.summary, start: event.start, end: event.end },
+          });
+        }
       }
     }
 
     await Promise.all([
       saveSnapshot(currentEvents),
       addChangelogEntries(changelogEntries),
+      addHistoryEvents(historyEvents),
     ]);
     // --- Változáskövetés vége ---
 
