@@ -445,21 +445,21 @@ export default function Dashboard() {
                         <div className="text-[9px] leading-tight mt-0.5">
                           {hasAirbnb && !day.isConflict && (
                             <div style={{ color: day.airbnb!.eventType === "manual_block" ? "#6b7280" : AIRBNB_COLOR }}>
-                              {day.airbnb!.eventType === "airbnb_guest" ? "A · Vendég" : day.airbnb!.eventType === "manual_block" ? "A · Manuális" : "A"}
+                              {day.airbnb!.eventType === "airbnb_guest" ? "Airbnb" : day.airbnb!.eventType === "manual_block" ? "Manuális" : "Airbnb"}
                             </div>
                           )}
                           {hasBooking && !day.isConflict && (
                             <div style={{ color: day.booking!.eventType === "sync_gap" ? "#b45309" : BOOKING_COLOR }}>
-                              {day.booking!.eventType === "booking_event" ? "B · Foglalt" : "B · Szinkron!"}
+                              {day.booking!.eventType === "booking_event" ? "Booking" : "! Nyitva"}
                             </div>
                           )}
                           {day.isConflict && <div className="text-white font-bold">⚠ Dupla</div>}
                           {day.isSyncGap && <div className="text-amber-700 font-medium">! Nyitva</div>}
                           {!hasAirbnb && !hasBooking && !day.isConflict && day.historicalAirbnb && (
-                            <div className="text-gray-300">A · archív</div>
+                            <div className="text-gray-300">archív</div>
                           )}
                           {!hasAirbnb && !hasBooking && !day.isConflict && !day.historicalAirbnb && day.historicalBooking && (
-                            <div className="text-gray-300">B · archív</div>
+                            <div className="text-gray-300">archív</div>
                           )}
                         </div>
                       )}
