@@ -237,8 +237,8 @@ export default function Dashboard() {
       const res = await fetch("/api/check-conflicts");
       const json = await res.json();
       setCheckResult(json.conflictsFound > 0
-        ? `Figyelem: ${json.conflictsFound} dupla foglalás találva!`
-        : `Rendben – nincs dupla foglalás.${json.changes > 0 ? ` (${json.changes} változás rögzítve)` : ""}`
+        ? `Figyelem: ${json.conflictsFound} vendég ütközés találva!`
+        : `Rendben – nincs vendég ütközés.${json.changes > 0 ? ` (${json.changes} változás rögzítve)` : ""}`
       );
       fetchData();
     } catch {
@@ -323,7 +323,7 @@ export default function Dashboard() {
               { label: "Booking.com foglalás", value: bookingEventCount, sub: "következő 6 hónap", color: BOOKING_COLOR },
               { label: "Manuális zárás", value: manualBlocks.length, sub: "Airbnb-n", color: null },
               {
-                label: conflictCount > 0 ? "Dupla foglalás – ellenőrizd!" : "Nincs dupla foglalás",
+                label: conflictCount > 0 ? "Vendég ütközés – ellenőrizd!" : "Nincs vendég ütközés",
                 value: conflictCount,
                 sub: "",
                 alert: conflictCount > 0,
@@ -362,7 +362,7 @@ export default function Dashboard() {
         {/* Conflicts */}
         {data?.configured && conflictCount > 0 && (
           <div className="bg-white rounded-lg border border-red-400 p-4">
-            <h2 className="font-medium text-red-700 mb-1">Dupla foglalás – azonnal ellenőrizd!</h2>
+            <h2 className="font-medium text-red-700 mb-1">Vendég ütközés – azonnal ellenőrizd!</h2>
             <p className="text-xs text-gray-500 mb-3">Mindkét platformon foglalás érkezett ugyanazokra a napokra.</p>
             <div className="space-y-2">
               {data.conflicts?.map((c, i) => (
@@ -399,7 +399,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#dce8f7", border: `1px solid ${BOOKING_COLOR}` }}></div>Booking.com foglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-100 border border-gray-300"></div>Manuálisan zárolt (Airbnb)</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-amber-100 border border-amber-300"></div>Szinkron hiány – Booking.com zárva, Airbnb nyitva</div>
-              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-red-500"></div>Dupla foglalás – azonnal ellenőrizd!</div>
+              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-red-500"></div>Vendég ütközés – azonnal ellenőrizd!</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-50 border border-dashed border-gray-300"></div>Korábbi foglalás (archív)</div>
             </div>
           </div>
@@ -462,7 +462,7 @@ export default function Dashboard() {
                               {day.booking!.eventType === "booking_event" ? "Booking" : "! Nyitva"}
                             </div>
                           )}
-                          {day.isConflict && <div className="text-white font-bold">⚠ Dupla</div>}
+                          {day.isConflict && <div className="text-white font-bold">⚠ Ütközés</div>}
                           {day.isSyncGap && <div className="text-amber-700 font-medium">! Nyitva</div>}
                           {!hasAirbnb && !hasBooking && !day.isConflict && day.historicalAirbnb && (
                             <div style={{ color: "rgba(255,90,95,0.45)" }}>archív</div>
@@ -485,7 +485,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h3 className="font-medium text-gray-800 mb-3">
               {selectedDay.date.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" })}
-              {selectedDay.isConflict && <span className="ml-2 text-sm text-red-600 font-normal">– Dupla foglalás!</span>}
+              {selectedDay.isConflict && <span className="ml-2 text-sm text-red-600 font-normal">– Vendég ütközés!</span>}
               {selectedDay.isSyncGap && <span className="ml-2 text-sm text-amber-600 font-normal">– Szinkron hiány</span>}
               {!selectedDay.airbnb && !selectedDay.booking && (selectedDay.historicalAirbnb || selectedDay.historicalBooking) && (
                 <span className="ml-2 text-sm text-gray-400 font-normal">– archív adat</span>
@@ -582,7 +582,7 @@ export default function Dashboard() {
           <div>
             <p className="font-medium text-gray-700 mb-1">Mit figyel az app?</p>
             <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
-              <li>✓ Dupla foglalás – Airbnb vendég és Booking.com zárás ugyanazon napokra</li>
+              <li>✓ Vendég ütközés – Airbnb vendég és Booking.com zárás ugyanazon napokra</li>
               <li>✓ Szinkron hiány – Booking.com zárt, de Airbnb-n még lehet foglalni</li>
               <li>✓ Manuális zárások azonosítása – Airbnb-n van, Booking.com-on nincs párja</li>
               <li>✓ Változáskövetés – mikor jelent meg vagy tűnt el egy foglalás</li>
