@@ -187,8 +187,8 @@ export function formatDate(date: Date): string {
 
 export function eventTypeLabel(type: EventType): string {
   switch (type) {
-    case "airbnb_guest": return "Airbnb vendégfoglalás";
-    case "booking_event": return "Booking.com foglalás";
+    case "airbnb_guest": return "Foglalás";
+    case "booking_event": return "Foglalás";
     case "manual_block": return "Manuális zárás";
     case "sync_gap": return "Szinkron hiány – Airbnb nyitva!";
     case "unknown": return "Ismeretlen";

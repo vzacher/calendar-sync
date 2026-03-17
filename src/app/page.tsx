@@ -131,8 +131,8 @@ function buildCalendarDays(year: number, month: number, data: CalendarData): Cal
 
 function eventTypeLabel(type: string): string {
   switch (type) {
-    case "airbnb_guest": return "Airbnb vendégfoglalás";
-    case "booking_event": return "Booking.com foglalás";
+    case "airbnb_guest": return "Foglalás";
+    case "booking_event": return "Foglalás";
     case "manual_block": return "Manuális zárás";
     case "sync_gap": return "Szinkron hiány – Airbnb nyitva!";
     case "completed": return "Lezárult";
@@ -160,7 +160,7 @@ function DayDetail({ booking, platform, hasAirbnbGuest }: { booking: BookingEntr
 
   let label = eventTypeLabel(booking.eventType);
   if (platform === "airbnb" && booking.eventType === "booking_event") {
-    label = "Booking.com miatt zárolt nap";
+    label = "Booking miatt zárolt nap";
   }
 
   return (
@@ -305,8 +305,8 @@ export default function Dashboard() {
         {data?.configured && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Airbnb vendégfoglalás", value: airbnbGuestCount, sub: "következő 6 hónap", color: AIRBNB_COLOR },
-              { label: "Booking.com foglalás", value: bookingEventCount, sub: "következő 6 hónap", color: BOOKING_COLOR },
+              { label: "Airbnb foglalás", value: airbnbGuestCount, sub: "következő 6 hónap", color: AIRBNB_COLOR },
+              { label: "Booking foglalás", value: bookingEventCount, sub: "következő 6 hónap", color: BOOKING_COLOR },
               { label: "Manuális zárás", value: manualBlocks.length, sub: "", color: null },
               {
                 label: conflictCount > 0 ? "Vendég ütközés – ellenőrizd!" : "Nincs vendég ütközés",
@@ -331,7 +331,7 @@ export default function Dashboard() {
         {/* Manual blocks */}
         {data?.configured && manualBlocks.length > 0 && (
           <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="font-medium text-gray-800 mb-1">Manuális zárások (Airbnb)</h2>
+            <h2 className="font-medium text-gray-800 mb-1">Manuális zárások</h2>
             <p className="text-xs text-gray-400 mb-3">Airbnb-n kézzel lezárolt napok, amelyekhez nem tartozik Booking.com foglalás.</p>
             <div className="space-y-2">
               {manualBlocks.map((b, i) => (
@@ -361,12 +361,12 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-600">
                     <div>
                       <div className="font-medium mb-0.5" style={{ color: AIRBNB_COLOR }}>Airbnb</div>
-                      <div>Airbnb vendégfoglalás</div>
+                      <div>Foglalás</div>
                       <div className="text-gray-400">{formatDate(c.airbnb.start)} – {formatDate(c.airbnb.end)}</div>
                     </div>
                     <div>
-                      <div className="font-medium mb-0.5" style={{ color: BOOKING_COLOR }}>Booking.com</div>
-                      <div>Booking.com foglalás</div>
+                      <div className="font-medium mb-0.5" style={{ color: BOOKING_COLOR }}>Booking</div>
+                      <div>Foglalás</div>
                       <div className="text-gray-400">{formatDate(c.booking.start)} – {formatDate(c.booking.end)}</div>
                     </div>
                   </div>
@@ -382,7 +382,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-medium text-gray-700 mb-3">Jelmagyarázat</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#ffd5d6", border: `1px solid ${AIRBNB_COLOR}` }}></div>Airbnb vendégfoglalás</div>
-              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#dce8f7", border: `1px solid ${BOOKING_COLOR}` }}></div>Booking.com foglalás</div>
+              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#dce8f7", border: `1px solid ${BOOKING_COLOR}` }}></div>Booking foglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-100 border border-gray-300"></div>Manuális zárás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: CONFLICT_COLOR }}></div>Figyelmeztetés (ütközés / szinkron hiány)</div>
             </div>
@@ -465,9 +465,6 @@ export default function Dashboard() {
               {selectedDay.date.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" })}
               {selectedDay.isConflict && <span className="ml-2 text-sm font-normal" style={{ color: CONFLICT_COLOR }}>– Vendég ütközés!</span>}
               {selectedDay.isSyncGap && <span className="ml-2 text-sm text-amber-600 font-normal">– Szinkron hiány</span>}
-              {!selectedDay.airbnb && !selectedDay.booking && (selectedDay.historicalAirbnb || selectedDay.historicalBooking) && (
-                <span className="ml-2 text-sm text-gray-400 font-normal">– archív foglalás</span>
-              )}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
@@ -477,21 +474,23 @@ export default function Dashboard() {
                 ) : selectedDay.historicalAirbnb ? (
                   <div className="opacity-50">
                     <DayDetail booking={{ ...selectedDay.historicalAirbnb, source: "airbnb", eventType: selectedDay.historicalAirbnb.eventType as EventType }} platform="airbnb" />
-                    <p className="text-xs text-gray-400 mt-1">archív foglalás</p>
                   </div>
+                ) : selectedDay.historicalBooking ? (
+                  <p className="text-sm text-gray-300">–</p>
                 ) : (
                   <DayDetail booking={null} platform="airbnb" />
                 )}
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: BOOKING_COLOR }}>Booking.com</p>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: BOOKING_COLOR }}>Booking</p>
                 {selectedDay.booking ? (
                   <DayDetail booking={selectedDay.booking} platform="booking" hasAirbnbGuest={selectedDay.airbnb?.eventType === "airbnb_guest"} />
                 ) : selectedDay.historicalBooking ? (
                   <div className="opacity-50">
                     <DayDetail booking={{ ...selectedDay.historicalBooking, source: "booking", eventType: selectedDay.historicalBooking.eventType as EventType }} platform="booking" />
-                    <p className="text-xs text-gray-400 mt-1">archív foglalás</p>
                   </div>
+                ) : selectedDay.historicalAirbnb ? (
+                  <p className="text-sm text-gray-300">–</p>
                 ) : (
                   <DayDetail booking={null} platform="booking" hasAirbnbGuest={selectedDay.airbnb?.eventType === "airbnb_guest"} />
                 )}
@@ -506,7 +505,7 @@ export default function Dashboard() {
             <button onClick={() => setLogOpen(o => !o)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
               <h2 className="font-medium text-gray-800">Eseménynapló</h2>
-              <span className="text-gray-400 text-sm">{logOpen ? "▲" : "▼"}</span>
+              <span className="text-gray-400 text-xs shrink-0">{logOpen ? "▲" : "▼"}</span>
             </button>
             {logOpen && (
               <div className="px-4 pb-4 space-y-4 max-h-96 overflow-y-auto border-t border-gray-100">
@@ -526,7 +525,7 @@ export default function Dashboard() {
                             </span>
                             <div>
                               <span className="font-medium" style={{ color: entry.platform === "airbnb" ? AIRBNB_COLOR : BOOKING_COLOR }}>
-                                {entry.platform === "airbnb" ? "Airbnb" : "Booking.com"}
+                                {entry.platform === "airbnb" ? "Airbnb" : "Booking"}
                               </span>
                               <span className="text-gray-500 text-xs ml-1.5">
                                 {entry.type === "appeared" ? "megjelent" : entry.type === "completed" ? "lezárult" : "eltűnt"}
@@ -550,7 +549,7 @@ export default function Dashboard() {
           <button onClick={() => setInfoOpen(o => !o)}
             className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
             <h2 className="font-semibold text-gray-800">Hogyan működik? — Korlátok és magyarázat</h2>
-            <span className="text-gray-400 text-sm">{infoOpen ? "▲" : "▼"}</span>
+            <span className="text-gray-400 text-xs shrink-0">{infoOpen ? "▲" : "▼"}</span>
           </button>
           {infoOpen && (
             <div className="px-5 pb-5 text-sm space-y-4 border-t border-gray-100 pt-4">
