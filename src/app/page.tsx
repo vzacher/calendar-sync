@@ -452,7 +452,7 @@ export default function Dashboard() {
                       </div>
                       {day.isCurrentMonth && (
                         <div className="text-[9px] leading-tight mt-0.5">
-                          {hasAirbnb && !day.isConflict && (
+                          {hasAirbnb && !day.isConflict && !(day.airbnb!.eventType === "booking_event" && hasBooking) && (
                             <div style={{ color: day.airbnb!.eventType === "manual_block" ? "#6b7280" : AIRBNB_COLOR }}>
                               {day.airbnb!.eventType === "airbnb_guest" ? "Airbnb" : day.airbnb!.eventType === "manual_block" ? "Manuális" : "Airbnb"}
                             </div>
