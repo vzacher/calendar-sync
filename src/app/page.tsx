@@ -430,7 +430,10 @@ export default function Dashboard() {
                   if (!day.isCurrentMonth) bgClass = "bg-gray-50";
                   else if (day.isConflict) bgClass = "bg-red-500";
                   else if (day.isSyncGap) bgClass = "bg-amber-100";
-                  else if (hasAirbnb && hasBooking) bgStyle = { background: `linear-gradient(135deg, rgba(255,90,95,0.15) 50%, rgba(0,53,128,0.10) 50%)` };
+                  else if (hasAirbnb && hasBooking) {
+                    if (day.airbnb!.eventType === "booking_event") bgStyle = { backgroundColor: "rgba(0,53,128,0.09)" };
+                    else bgStyle = { background: `linear-gradient(135deg, rgba(255,90,95,0.15) 50%, rgba(0,53,128,0.10) 50%)` };
+                  }
                   else if (hasAirbnb) {
                     if (day.airbnb!.eventType === "airbnb_guest") bgStyle = { backgroundColor: "rgba(255,90,95,0.13)" };
                     else if (day.airbnb!.eventType === "manual_block") bgClass = "bg-gray-100";
