@@ -159,7 +159,7 @@ function DayDetail({ booking, platform, hasAirbnbGuest }: { booking: BookingEntr
     if (platform === "booking" && hasAirbnbGuest) {
       return (
         <div className="text-sm space-y-1">
-          <p className="font-medium text-gray-500 italic">Remélhetőleg szabad</p>
+          <p className="font-medium text-gray-500 italic">Remélhetőleg zárolt</p>
           <p className="text-xs text-gray-400">Az Airbnb→Booking.com szinkron iCal alapján nem ellenőrizhető.</p>
         </div>
       );
@@ -424,20 +424,29 @@ export default function Dashboard() {
                   const hasAirbnb = !!day.airbnb;
                   const hasBooking = !!day.booking;
                   const hasHistorical = !!day.historicalAirbnb || !!day.historicalBooking;
-                  let bg = "";
-                  if (!day.isCurrentMonth) bg = "bg-gray-50";
-                  else if (day.isConflict) bg = "bg-red-500";
-                  else if (day.isSyncGap) bg = "bg-amber-100";
-                  else if (hasAirbnb && hasBooking) bg = "bg-purple-50";
-                  else if (hasAirbnb) bg = day.airbnb!.eventType === "airbnb_guest" ? "bg-red-100" : day.airbnb!.eventType === "manual_block" ? "bg-gray-100" : "bg-red-50";
-                  else if (hasBooking) bg = day.booking!.eventType === "booking_event" ? "bg-blue-100" : "bg-amber-100";
-                  else if (hasHistorical) bg = "bg-gray-50";
+
+                  let bgClass = "";
+                  let bgStyle: React.CSSProperties = {};
+                  if (!day.isCurrentMonth) bgClass = "bg-gray-50";
+                  else if (day.isConflict) bgClass = "bg-red-500";
+                  else if (day.isSyncGap) bgClass = "bg-amber-100";
+                  else if (hasAirbnb && hasBooking) bgStyle = { background: `linear-gradient(135deg, rgba(255,90,95,0.15) 50%, rgba(0,53,128,0.10) 50%)` };
+                  else if (hasAirbnb) {
+                    if (day.airbnb!.eventType === "airbnb_guest") bgStyle = { backgroundColor: "rgba(255,90,95,0.13)" };
+                    else if (day.airbnb!.eventType === "manual_block") bgClass = "bg-gray-100";
+                    else bgStyle = { backgroundColor: "rgba(255,90,95,0.07)" };
+                  } else if (hasBooking) {
+                    if (day.booking!.eventType === "booking_event") bgStyle = { backgroundColor: "rgba(0,53,128,0.09)" };
+                    else bgClass = "bg-amber-100";
+                  } else if (day.historicalAirbnb) bgStyle = { backgroundColor: "rgba(255,90,95,0.05)" };
+                  else if (day.historicalBooking) bgStyle = { backgroundColor: "rgba(0,53,128,0.05)" };
 
                   const isClickable = day.isCurrentMonth && (hasAirbnb || hasBooking || hasHistorical);
 
                   return (
                     <div key={i} onClick={() => isClickable && setSelectedDay(selectedDay?.date === day.date ? null : day)}
-                      className={`min-h-[48px] p-1 border-b border-r border-gray-100 ${bg} ${isClickable ? "cursor-pointer hover:opacity-80" : ""} ${day.isToday ? "ring-2 ring-blue-500 ring-inset" : ""}`}>
+                      className={`min-h-[48px] p-1 border-b border-r border-gray-100 ${bgClass} ${isClickable ? "cursor-pointer hover:opacity-80" : ""} ${day.isToday ? "ring-2 ring-blue-500 ring-inset" : ""}`}
+                      style={bgStyle}>
                       <div className={`text-xs font-medium ${!day.isCurrentMonth ? "text-gray-300" : day.isConflict ? "text-white" : day.isToday ? "text-blue-600" : "text-gray-700"}`}>
                         {day.date.getDate()}
                       </div>
@@ -456,10 +465,10 @@ export default function Dashboard() {
                           {day.isConflict && <div className="text-white font-bold">⚠ Dupla</div>}
                           {day.isSyncGap && <div className="text-amber-700 font-medium">! Nyitva</div>}
                           {!hasAirbnb && !hasBooking && !day.isConflict && day.historicalAirbnb && (
-                            <div className="text-gray-300">archív</div>
+                            <div style={{ color: "rgba(255,90,95,0.45)" }}>archív</div>
                           )}
                           {!hasAirbnb && !hasBooking && !day.isConflict && !day.historicalAirbnb && day.historicalBooking && (
-                            <div className="text-gray-300">archív</div>
+                            <div style={{ color: "rgba(0,53,128,0.40)" }}>archív</div>
                           )}
                         </div>
                       )}
