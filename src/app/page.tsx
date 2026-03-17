@@ -58,6 +58,8 @@ interface CalendarDay {
   date: Date;
   airbnb: BookingEntry | null;
   booking: BookingEntry | null;
+  historicalAirbnb: HistoryEvent | null;
+  historicalBooking: HistoryEvent | null;
   isConflict: boolean;
   isSyncGap: boolean;
   isToday: boolean;
@@ -66,6 +68,9 @@ interface CalendarDay {
 
 const MONTHS_HU = ["Január","Február","Március","Április","Május","Június","Július","Augusztus","Szeptember","Október","November","December"];
 const DAYS_HU = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
+
+const AIRBNB_COLOR = "#FF5A5F";
+const BOOKING_COLOR = "#003580";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" });
@@ -91,7 +96,7 @@ function buildCalendarDays(year: number, month: number, data: CalendarData): Cal
   let startDow = firstDay.getDay();
   startDow = startDow === 0 ? 6 : startDow - 1;
 
-  const empty = { airbnb: null, booking: null, isConflict: false, isSyncGap: false, isToday: false, isCurrentMonth: false };
+  const empty = { airbnb: null, booking: null, historicalAirbnb: null, historicalBooking: null, isConflict: false, isSyncGap: false, isToday: false, isCurrentMonth: false };
   const days: CalendarDay[] = [];
 
   for (let i = 0; i < startDow; i++)
@@ -105,7 +110,15 @@ function buildCalendarDays(year: number, month: number, data: CalendarData): Cal
       (c) => c.airbnbUid === airbnbBooking.uid && c.bookingUid === bookingBooking.uid
     ));
     const isSyncGap = !isConflict && !!bookingBooking && bookingBooking.eventType === "sync_gap" && !airbnbBooking;
-    days.push({ date, airbnb: airbnbBooking, booking: bookingBooking, isConflict, isSyncGap, isToday: isSameDay(date, today), isCurrentMonth: true });
+
+    const historicalAirbnb = !airbnbBooking
+      ? (data.history?.find((h) => h.source === "airbnb" && isDateInRange(date, h.start, h.end)) || null)
+      : null;
+    const historicalBooking = !bookingBooking
+      ? (data.history?.find((h) => h.source === "booking" && isDateInRange(date, h.start, h.end)) || null)
+      : null;
+
+    days.push({ date, airbnb: airbnbBooking, booking: bookingBooking, historicalAirbnb, historicalBooking, isConflict, isSyncGap, isToday: isSameDay(date, today), isCurrentMonth: true });
   }
 
   const remaining = 42 - days.length;
@@ -141,11 +154,27 @@ function uniqueByUid(bookings: BookingEntry[]): BookingEntry[] {
   return bookings.filter((b) => { if (seen.has(b.uid)) return false; seen.add(b.uid); return true; });
 }
 
-function DayDetail({ booking }: { booking: BookingEntry | null }) {
-  if (!booking) return <p className="text-sm text-gray-400 italic">Szabad</p>;
+function DayDetail({ booking, platform, hasAirbnbGuest }: { booking: BookingEntry | null; platform: "airbnb" | "booking"; hasAirbnbGuest?: boolean }) {
+  if (!booking) {
+    if (platform === "booking" && hasAirbnbGuest) {
+      return (
+        <div className="text-sm space-y-1">
+          <p className="font-medium text-gray-500 italic">Remélhetőleg szabad</p>
+          <p className="text-xs text-gray-400">Az Airbnb→Booking.com szinkron iCal alapján nem ellenőrizhető.</p>
+        </div>
+      );
+    }
+    return <p className="text-sm text-gray-400 italic">Szabad</p>;
+  }
+
+  let label = humanSummary(booking);
+  if (platform === "airbnb" && booking.eventType === "booking_event") {
+    label = "Booking.com miatt zárolva";
+  }
+
   return (
     <div className="text-sm space-y-1">
-      <p className="font-medium text-gray-800">{humanSummary(booking)}</p>
+      <p className="font-medium text-gray-800">{label}</p>
       <p className="text-gray-500 text-xs">{formatDate(booking.start)} – {formatDate(booking.end)}</p>
       {booking.eventType === "airbnb_guest" && (
         <div className="text-xs space-y-0.5 pt-1">
@@ -164,6 +193,19 @@ function DayDetail({ booking }: { booking: BookingEntry | null }) {
   );
 }
 
+// Group changelog entries by check run (same timestamp = same run)
+function groupChangelogByRun(changelog: ChangelogEntry[]): { timestamp: string; entries: ChangelogEntry[] }[] {
+  const map = new Map<string, ChangelogEntry[]>();
+  for (const entry of changelog) {
+    const existing = map.get(entry.timestamp) || [];
+    existing.push(entry);
+    map.set(entry.timestamp, existing);
+  }
+  return Array.from(map.entries())
+    .map(([timestamp, entries]) => ({ timestamp, entries }))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
 export default function Dashboard() {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -173,8 +215,6 @@ export default function Dashboard() {
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
-  const [showChangelog, setShowChangelog] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -223,6 +263,7 @@ export default function Dashboard() {
   const manualBlocks = uniqueByUid((data?.airbnb ?? []).filter(b => b.eventType === "manual_block"));
   const airbnbGuestCount = (data?.airbnb ?? []).filter(b => b.eventType === "airbnb_guest").length;
   const bookingEventCount = (data?.booking ?? []).filter(b => b.eventType === "booking_event").length;
+  const changelogRuns = data?.changelog ? groupChangelogByRun(data.changelog) : [];
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -237,21 +278,13 @@ export default function Dashboard() {
             {data?.lastChecked && (
               <span className="text-xs text-gray-400">Utolsó ellenőrzés: {new Date(data.lastChecked).toLocaleTimeString("hu-HU")}</span>
             )}
-            <div className="flex flex-row flex-wrap gap-2">
-              <button onClick={() => setShowHistory(v => !v)} className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                Előzmények {data?.history?.length ? `(${data.history.length})` : ""}
-              </button>
-              <button onClick={() => setShowChangelog(v => !v)} className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                Változásnapló {data?.changelog?.length ? `(${data.changelog.length})` : ""}
-              </button>
-              <button
-                onClick={handleManualCheck}
-                disabled={checking || !data?.configured}
-                className="px-3 py-1.5 text-xs sm:text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40"
-              >
-                {checking ? "Ellenőrzés..." : "Ellenőrzés most"}
-              </button>
-            </div>
+            <button
+              onClick={handleManualCheck}
+              disabled={checking || !data?.configured}
+              className="px-3 py-1.5 text-xs sm:text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40"
+            >
+              {checking ? "Ellenőrzés..." : "Ellenőrzés most"}
+            </button>
           </div>
         </div>
       </div>
@@ -286,18 +319,22 @@ export default function Dashboard() {
         {data?.configured && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Airbnb foglalás", value: airbnbGuestCount, sub: "következő 6 hónap" },
-              { label: "Booking.com foglalás", value: bookingEventCount, sub: "következő 6 hónap" },
-              { label: "Manuális zárás", value: manualBlocks.length, sub: "Airbnb-n" },
+              { label: "Airbnb foglalás", value: airbnbGuestCount, sub: "következő 6 hónap", color: AIRBNB_COLOR },
+              { label: "Booking.com foglalás", value: bookingEventCount, sub: "következő 6 hónap", color: BOOKING_COLOR },
+              { label: "Manuális zárás", value: manualBlocks.length, sub: "Airbnb-n", color: null },
               {
                 label: conflictCount > 0 ? "Dupla foglalás – ellenőrizd!" : "Nincs dupla foglalás",
                 value: conflictCount,
                 sub: "",
                 alert: conflictCount > 0,
+                color: null,
               },
             ].map((s, i) => (
               <div key={i} className={`bg-white rounded-lg border p-4 text-center ${s.alert ? "border-red-400" : "border-gray-200"}`}>
-                <div className={`text-2xl font-bold ${s.alert ? "text-red-600" : "text-gray-800"}`}>{s.value}</div>
+                <div
+                  className={`text-2xl font-bold ${s.alert ? "text-red-600" : ""}`}
+                  style={!s.alert && s.color ? { color: s.color } : !s.alert && !s.color ? { color: "#1f2937" } : undefined}
+                >{s.value}</div>
                 <div className={`text-xs mt-1 ${s.alert ? "text-red-600 font-medium" : "text-gray-600"}`}>{s.label}</div>
                 {s.sub && <div className="text-xs text-gray-400 mt-0.5">{s.sub}</div>}
               </div>
@@ -337,12 +374,12 @@ export default function Dashboard() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-600">
                     <div>
-                      <div className="font-medium mb-0.5">Airbnb</div>
+                      <div className="font-medium mb-0.5" style={{ color: AIRBNB_COLOR }}>Airbnb</div>
                       <div>Vendégfoglalás</div>
                       <div className="text-gray-400">{formatDate(c.airbnb.start)} – {formatDate(c.airbnb.end)}</div>
                     </div>
                     <div>
-                      <div className="font-medium mb-0.5">Booking.com</div>
+                      <div className="font-medium mb-0.5" style={{ color: BOOKING_COLOR }}>Booking.com</div>
                       <div>Foglalás / zárás</div>
                       <div className="text-gray-400">{formatDate(c.booking.start)} – {formatDate(c.booking.end)}</div>
                     </div>
@@ -353,68 +390,17 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* History */}
-        {showHistory && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="font-medium text-gray-800 mb-1">Korábbi foglalások</h2>
-            <p className="text-xs text-gray-400 mb-3">Lezárult, múltbeli események – véglegesen megőrizve az iCal-ból való kikerülés után is.</p>
-            {(!data?.history || data.history.length === 0) ? (
-              <p className="text-sm text-gray-400">Még nincs rögzített előzmény.</p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto">
-                {data.history.map((h, i) => (
-                  <div key={i} className="flex justify-between text-sm py-2 border-b border-gray-100">
-                    <div>
-                      <span className="font-medium">{h.source === "airbnb" ? "Airbnb" : "Booking.com"}</span>
-                      <span className="text-gray-400 text-xs ml-2">{eventTypeLabel(h.eventType)}</span>
-                      <div className="text-gray-500 text-xs mt-0.5">{formatDate(h.start)} – {formatDate(h.end)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Changelog */}
-        {showChangelog && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="font-medium text-gray-800 mb-3">Változásnapló</h2>
-            {(!data?.changelog || data.changelog.length === 0) ? (
-              <p className="text-sm text-gray-400">Még nincs rögzített változás.</p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto">
-                {data.changelog.map((entry, i) => (
-                  <div key={i} className="flex gap-3 text-sm py-2 border-b border-gray-100">
-                    <span className="text-gray-400 w-4 shrink-0">
-                      {entry.type === "appeared" ? "+" : entry.type === "completed" ? "✓" : "−"}
-                    </span>
-                    <div>
-                      <span className="font-medium">{entry.platform === "airbnb" ? "Airbnb" : "Booking.com"}</span>
-                      <span className="text-gray-400 text-xs ml-2">{eventTypeLabel(entry.eventType)}</span>
-                      <span className="text-gray-400 text-xs ml-2">
-                        {entry.type === "appeared" ? "megjelent" : entry.type === "completed" ? "lezárult" : "eltűnt"}
-                      </span>
-                      <div className="text-gray-500 text-xs mt-0.5">{formatDate(entry.event.start)} – {formatDate(entry.event.end)}</div>
-                      <div className="text-gray-300 text-xs">{new Date(entry.timestamp).toLocaleString("hu-HU")}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Jelmagyarázat */}
         {data?.configured && (
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Jelmagyarázat</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
-              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-red-200 border border-red-300"></div>Airbnb vendégfoglalás</div>
-              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-blue-100 border border-blue-200"></div>Booking.com foglalás</div>
+              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#ffd5d6", border: `1px solid ${AIRBNB_COLOR}` }}></div>Airbnb vendégfoglalás</div>
+              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#dce8f7", border: `1px solid ${BOOKING_COLOR}` }}></div>Booking.com foglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-100 border border-gray-300"></div>Manuálisan zárolt (Airbnb)</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-amber-100 border border-amber-300"></div>Szinkron hiány – Booking.com zárva, Airbnb nyitva</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-red-500"></div>Dupla foglalás – azonnal ellenőrizd!</div>
+              <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-50 border border-dashed border-gray-300"></div>Korábbi foglalás (archív)</div>
             </div>
           </div>
         )}
@@ -437,6 +423,7 @@ export default function Dashboard() {
                 {calendarDays.map((day, i) => {
                   const hasAirbnb = !!day.airbnb;
                   const hasBooking = !!day.booking;
+                  const hasHistorical = !!day.historicalAirbnb || !!day.historicalBooking;
                   let bg = "";
                   if (!day.isCurrentMonth) bg = "bg-gray-50";
                   else if (day.isConflict) bg = "bg-red-500";
@@ -444,27 +431,36 @@ export default function Dashboard() {
                   else if (hasAirbnb && hasBooking) bg = "bg-purple-50";
                   else if (hasAirbnb) bg = day.airbnb!.eventType === "airbnb_guest" ? "bg-red-100" : day.airbnb!.eventType === "manual_block" ? "bg-gray-100" : "bg-red-50";
                   else if (hasBooking) bg = day.booking!.eventType === "booking_event" ? "bg-blue-100" : "bg-amber-100";
+                  else if (hasHistorical) bg = "bg-gray-50";
+
+                  const isClickable = day.isCurrentMonth && (hasAirbnb || hasBooking || hasHistorical);
 
                   return (
-                    <div key={i} onClick={() => day.isCurrentMonth && (hasAirbnb || hasBooking) && setSelectedDay(selectedDay?.date === day.date ? null : day)}
-                      className={`min-h-[48px] p-1 border-b border-r border-gray-100 ${bg} ${day.isCurrentMonth && (hasAirbnb || hasBooking) ? "cursor-pointer hover:opacity-80" : ""} ${day.isToday ? "ring-2 ring-blue-500 ring-inset" : ""}`}>
+                    <div key={i} onClick={() => isClickable && setSelectedDay(selectedDay?.date === day.date ? null : day)}
+                      className={`min-h-[48px] p-1 border-b border-r border-gray-100 ${bg} ${isClickable ? "cursor-pointer hover:opacity-80" : ""} ${day.isToday ? "ring-2 ring-blue-500 ring-inset" : ""}`}>
                       <div className={`text-xs font-medium ${!day.isCurrentMonth ? "text-gray-300" : day.isConflict ? "text-white" : day.isToday ? "text-blue-600" : "text-gray-700"}`}>
                         {day.date.getDate()}
                       </div>
                       {day.isCurrentMonth && (
                         <div className="text-[9px] leading-tight mt-0.5">
                           {hasAirbnb && !day.isConflict && (
-                            <div className={`${day.airbnb!.eventType === "manual_block" ? "text-gray-500" : "text-red-700"}`}>
+                            <div style={{ color: day.airbnb!.eventType === "manual_block" ? "#6b7280" : AIRBNB_COLOR }}>
                               {day.airbnb!.eventType === "airbnb_guest" ? "A · Vendég" : day.airbnb!.eventType === "manual_block" ? "A · Manuális" : "A"}
                             </div>
                           )}
                           {hasBooking && !day.isConflict && (
-                            <div className={`${day.booking!.eventType === "sync_gap" ? "text-amber-700" : "text-blue-700"}`}>
+                            <div style={{ color: day.booking!.eventType === "sync_gap" ? "#b45309" : BOOKING_COLOR }}>
                               {day.booking!.eventType === "booking_event" ? "B · Foglalt" : "B · Szinkron!"}
                             </div>
                           )}
                           {day.isConflict && <div className="text-white font-bold">⚠ Dupla</div>}
                           {day.isSyncGap && <div className="text-amber-700 font-medium">! Nyitva</div>}
+                          {!hasAirbnb && !hasBooking && !day.isConflict && day.historicalAirbnb && (
+                            <div className="text-gray-300">A · archív</div>
+                          )}
+                          {!hasAirbnb && !hasBooking && !day.isConflict && !day.historicalAirbnb && day.historicalBooking && (
+                            <div className="text-gray-300">B · archív</div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -482,16 +478,74 @@ export default function Dashboard() {
               {selectedDay.date.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" })}
               {selectedDay.isConflict && <span className="ml-2 text-sm text-red-600 font-normal">– Dupla foglalás!</span>}
               {selectedDay.isSyncGap && <span className="ml-2 text-sm text-amber-600 font-normal">– Szinkron hiány</span>}
+              {!selectedDay.airbnb && !selectedDay.booking && (selectedDay.historicalAirbnb || selectedDay.historicalBooking) && (
+                <span className="ml-2 text-sm text-gray-400 font-normal">– archív adat</span>
+              )}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Airbnb</p>
-                <DayDetail booking={selectedDay.airbnb} />
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: AIRBNB_COLOR }}>Airbnb</p>
+                {selectedDay.airbnb ? (
+                  <DayDetail booking={selectedDay.airbnb} platform="airbnb" />
+                ) : selectedDay.historicalAirbnb ? (
+                  <div className="text-sm space-y-1 opacity-50">
+                    <p className="font-medium text-gray-600 italic">{eventTypeLabel(selectedDay.historicalAirbnb.eventType)} (archív)</p>
+                    <p className="text-gray-400 text-xs">{formatDate(selectedDay.historicalAirbnb.start)} – {formatDate(selectedDay.historicalAirbnb.end)}</p>
+                  </div>
+                ) : (
+                  <DayDetail booking={null} platform="airbnb" />
+                )}
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Booking.com</p>
-                <DayDetail booking={selectedDay.booking} />
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: BOOKING_COLOR }}>Booking.com</p>
+                {selectedDay.booking ? (
+                  <DayDetail booking={selectedDay.booking} platform="booking" hasAirbnbGuest={selectedDay.airbnb?.eventType === "airbnb_guest"} />
+                ) : selectedDay.historicalBooking ? (
+                  <div className="text-sm space-y-1 opacity-50">
+                    <p className="font-medium text-gray-600 italic">{eventTypeLabel(selectedDay.historicalBooking.eventType)} (archív)</p>
+                    <p className="text-gray-400 text-xs">{formatDate(selectedDay.historicalBooking.start)} – {formatDate(selectedDay.historicalBooking.end)}</p>
+                  </div>
+                ) : (
+                  <DayDetail booking={null} platform="booking" hasAirbnbGuest={selectedDay.airbnb?.eventType === "airbnb_guest"} />
+                )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Activity log */}
+        {data?.configured && changelogRuns.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h2 className="font-medium text-gray-800 mb-3">Eseménynapló</h2>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {changelogRuns.map((run, ri) => (
+                <div key={ri}>
+                  <div className="text-xs text-gray-400 mb-1.5 flex items-center gap-2">
+                    <span>{new Date(run.timestamp).toLocaleString("hu-HU")}</span>
+                    <span className="text-gray-200">|</span>
+                    <span>{run.entries.some(e => e.type !== "completed") ? "automatikus / kézi ellenőrzés" : "archivált lezárult foglalások"}</span>
+                  </div>
+                  <div className="space-y-1 pl-3 border-l-2 border-gray-100">
+                    {run.entries.map((entry, ei) => (
+                      <div key={ei} className="flex items-start gap-2 text-sm">
+                        <span className="text-gray-400 font-mono w-4 shrink-0 mt-0.5">
+                          {entry.type === "appeared" ? "+" : entry.type === "completed" ? "✓" : "−"}
+                        </span>
+                        <div>
+                          <span className="font-medium" style={{ color: entry.platform === "airbnb" ? AIRBNB_COLOR : BOOKING_COLOR }}>
+                            {entry.platform === "airbnb" ? "Airbnb" : "Booking.com"}
+                          </span>
+                          <span className="text-gray-500 text-xs ml-1.5">
+                            {entry.type === "appeared" ? "megjelent" : entry.type === "completed" ? "lezárult" : "eltűnt"}
+                            {" · "}{eventTypeLabel(entry.eventType)}
+                          </span>
+                          <div className="text-gray-400 text-xs">{formatDate(entry.event.start)} – {formatDate(entry.event.end)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
