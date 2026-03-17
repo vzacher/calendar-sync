@@ -467,12 +467,6 @@ export default function Dashboard() {
                           )}
                           {day.isConflict && <div className="text-white font-bold">⚠ Ütközés</div>}
                           {day.isSyncGap && <div className="text-amber-700 font-medium">! Nyitva</div>}
-                          {!hasAirbnb && !hasBooking && !day.isConflict && day.historicalAirbnb && (
-                            <div style={{ color: "rgba(255,90,95,0.45)" }}>archív</div>
-                          )}
-                          {!hasAirbnb && !hasBooking && !day.isConflict && !day.historicalAirbnb && day.historicalBooking && (
-                            <div style={{ color: "rgba(0,53,128,0.40)" }}>archív</div>
-                          )}
                         </div>
                       )}
                     </div>
