@@ -187,10 +187,10 @@ export function formatDate(date: Date): string {
 
 export function eventTypeLabel(type: EventType): string {
   switch (type) {
-    case "airbnb_guest": return "Airbnb vendég";
-    case "booking_event": return "Booking.com esemény";
-    case "manual_block": return "Manuális zárás (Airbnb-n)";
-    case "sync_gap": return "⚠️ Szinkron hiány – Airbnb még nyitva!";
+    case "airbnb_guest": return "Airbnb vendégfoglalás";
+    case "booking_event": return "Booking.com foglalás";
+    case "manual_block": return "Manuális zárás (Airbnb)";
+    case "sync_gap": return "Szinkron hiány – Airbnb nyitva!";
     case "unknown": return "Ismeretlen";
   }
 }

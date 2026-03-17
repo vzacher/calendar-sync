@@ -6,14 +6,13 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
+  const isVercelCron = request.headers.get("x-vercel-cron") === "1";
+  const authHeader = request.headers.get("authorization");
+  const hasBearerAuth = !!cronSecret && authHeader === `Bearer ${cronSecret}`;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    const isVercelCron = request.headers.get("x-vercel-cron") === "1";
-    if (!isVercelCron) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!isVercelCron && !hasBearerAuth) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const airbnbUrl = process.env.AIRBNB_ICAL_URL;
@@ -77,13 +76,13 @@ export async function GET(request: NextRequest) {
 
     // Eltűnt események — megkülönböztetjük: múltba kerülő (history) vs. valóban eltűnt
     const historyEvents: HistoryEvent[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
 
     for (const event of previousSnapshot) {
       if (!currentUids.has(event.uid)) {
         const endDate = new Date(event.end);
-        const isPast = endDate <= today;
+        const isPast = endDate.getTime() <= todayUTC.getTime();
 
         if (isPast) {
           // Múltba kerülő foglalás → permanens history-ba mentjük
