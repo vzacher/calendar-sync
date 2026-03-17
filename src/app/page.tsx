@@ -176,15 +176,8 @@ function DayDetail({ booking, platform, hasAirbnbGuest }: { booking: BookingEntr
     <div className="text-sm space-y-1">
       <p className="font-medium text-gray-800">{label}</p>
       <p className="text-gray-500 text-xs">{formatDate(booking.start)} – {formatDate(booking.end)}</p>
-      {booking.eventType === "airbnb_guest" && (
-        <div className="text-xs space-y-0.5 pt-1">
-          {booking.phoneLastFour && <p className="text-gray-500">Telefonszám (utolsó 4): <strong>{booking.phoneLastFour}</strong></p>}
-          {booking.reservationUrl && (
-            <a href={booking.reservationUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-              Foglalás megtekintése →
-            </a>
-          )}
-        </div>
+      {booking.eventType === "airbnb_guest" && booking.phoneLastFour && (
+        <p className="text-xs text-gray-500 pt-1">Telefonszám (utolsó 4): <strong>{booking.phoneLastFour}</strong></p>
       )}
       {booking.eventType === "sync_gap" && (
         <p className="text-xs text-orange-600">Az Airbnb naptárban ezek a napok még elérhetők!</p>
