@@ -228,33 +228,35 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-3">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold">Naptár Szinkron</h1>
             <p className="text-sm text-gray-500">Airbnb & Booking.com dupla foglalás figyelő</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             {data?.lastChecked && (
               <span className="text-xs text-gray-400">Utolsó ellenőrzés: {new Date(data.lastChecked).toLocaleTimeString("hu-HU")}</span>
             )}
-            <button onClick={() => setShowHistory(v => !v)} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-              Előzmények {data?.history?.length ? `(${data.history.length})` : ""}
-            </button>
-            <button onClick={() => setShowChangelog(v => !v)} className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-              Változásnapló {data?.changelog?.length ? `(${data.changelog.length})` : ""}
-            </button>
-            <button
-              onClick={handleManualCheck}
-              disabled={checking || !data?.configured}
-              className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40"
-            >
-              {checking ? "Ellenőrzés..." : "Ellenőrzés most"}
-            </button>
+            <div className="flex flex-row flex-wrap gap-2">
+              <button onClick={() => setShowHistory(v => !v)} className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                Előzmények {data?.history?.length ? `(${data.history.length})` : ""}
+              </button>
+              <button onClick={() => setShowChangelog(v => !v)} className="px-3 py-1.5 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+                Változásnapló {data?.changelog?.length ? `(${data.changelog.length})` : ""}
+              </button>
+              <button
+                onClick={handleManualCheck}
+                disabled={checking || !data?.configured}
+                className="px-3 py-1.5 text-xs sm:text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40"
+              >
+                {checking ? "Ellenőrzés..." : "Ellenőrzés most"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 space-y-4">
 
         {/* Check result */}
         {checkResult && (
@@ -282,7 +284,7 @@ export default function Dashboard() {
 
         {/* Stats */}
         {data?.configured && (
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "Airbnb foglalás", value: airbnbGuestCount, sub: "következő 6 hónap" },
               { label: "Booking.com foglalás", value: bookingEventCount, sub: "következő 6 hónap" },
@@ -333,7 +335,7 @@ export default function Dashboard() {
                     <span className="font-medium text-red-700">Átfedés: {formatDate(c.overlapStart)} – {formatDate(c.overlapEnd)}</span>
                     <span className="text-gray-400 text-xs">Ugrás →</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs text-gray-600">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-600">
                     <div>
                       <div className="font-medium mb-0.5">Airbnb</div>
                       <div>Vendégfoglalás</div>
@@ -407,7 +409,7 @@ export default function Dashboard() {
         {data?.configured && (
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Jelmagyarázat</h2>
-            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-red-200 border border-red-300"></div>Airbnb vendégfoglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-blue-100 border border-blue-200"></div>Booking.com foglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-100 border border-gray-300"></div>Manuálisan zárolt (Airbnb)</div>
@@ -481,7 +483,7 @@ export default function Dashboard() {
               {selectedDay.isConflict && <span className="ml-2 text-sm text-red-600 font-normal">– Dupla foglalás!</span>}
               {selectedDay.isSyncGap && <span className="ml-2 text-sm text-amber-600 font-normal">– Szinkron hiány</span>}
             </h3>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Airbnb</p>
                 <DayDetail booking={selectedDay.airbnb} />
