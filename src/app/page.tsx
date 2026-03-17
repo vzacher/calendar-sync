@@ -330,10 +330,12 @@ export default function Dashboard() {
 
         {/* Manual blocks */}
         {data?.configured && manualBlocks.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="font-medium text-gray-800 mb-1">Manuális zárások</h2>
-            <p className="text-xs text-gray-400 mb-3">Airbnb-n kézzel lezárolt napok, amelyekhez nem tartozik Booking.com foglalás.</p>
-            <div className="space-y-2">
+          <div className="bg-white rounded-lg border border-gray-200">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-800">Manuális zárások</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Airbnb-n kézzel lezárolt napok, amelyekhez nem tartozik Booking foglalás.</p>
+            </div>
+            <div className="p-4 space-y-2">
               {manualBlocks.map((b, i) => (
                 <button key={i} onClick={() => navigateToDate(b.start)}
                   className="w-full flex items-center justify-between text-sm px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors text-left">
@@ -347,10 +349,12 @@ export default function Dashboard() {
 
         {/* Conflicts */}
         {data?.configured && conflictCount > 0 && (
-          <div className="bg-white rounded-lg border p-4" style={{ borderColor: CONFLICT_COLOR }}>
-            <h2 className="font-medium mb-1" style={{ color: CONFLICT_COLOR }}>Vendég ütközés – azonnal ellenőrizd!</h2>
-            <p className="text-xs text-gray-500 mb-3">Mindkét platformon foglalás érkezett ugyanazokra a napokra.</p>
-            <div className="space-y-2">
+          <div className="bg-white rounded-lg border" style={{ borderColor: CONFLICT_COLOR }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: CONFLICT_COLOR + "44" }}>
+              <h2 className="text-sm font-semibold" style={{ color: CONFLICT_COLOR }}>Vendég ütközés – azonnal ellenőrizd!</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Mindkét platformon foglalás érkezett ugyanazokra a napokra.</p>
+            </div>
+            <div className="p-4 space-y-2">
               {data.conflicts?.map((c, i) => (
                 <button key={i} onClick={() => navigateToDate(c.overlapStart)}
                   className="w-full text-left text-sm px-3 py-3 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors">
@@ -378,9 +382,11 @@ export default function Dashboard() {
 
         {/* Jelmagyarázat */}
         {data?.configured && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h2 className="text-sm font-medium text-gray-700 mb-3">Jelmagyarázat</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
+          <div className="bg-white rounded-lg border border-gray-200">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-800">Jelmagyarázat</h2>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#ffd5d6", border: `1px solid ${AIRBNB_COLOR}` }}></div>Airbnb vendégfoglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded" style={{ backgroundColor: "#dce8f7", border: `1px solid ${BOOKING_COLOR}` }}></div>Booking foglalás</div>
               <div className="flex items-center gap-2"><div className="w-8 h-4 rounded bg-gray-100 border border-gray-300"></div>Manuális zárás</div>
@@ -504,7 +510,7 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <button onClick={() => setLogOpen(o => !o)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
-              <h2 className="font-medium text-gray-800">Eseménynapló</h2>
+              <h2 className="text-sm font-semibold text-gray-800">Eseménynapló</h2>
               <span className="text-gray-400 text-xs shrink-0">{logOpen ? "▲" : "▼"}</span>
             </button>
             {logOpen && (
@@ -547,8 +553,8 @@ export default function Dashboard() {
         {/* Magyarázat */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <button onClick={() => setInfoOpen(o => !o)}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
-            <h2 className="font-semibold text-gray-800">Hogyan működik? — Korlátok és magyarázat</h2>
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+            <h2 className="text-sm font-semibold text-gray-800">Hogyan működik? — Korlátok és magyarázat</h2>
             <span className="text-gray-400 text-xs shrink-0">{infoOpen ? "▲" : "▼"}</span>
           </button>
           {infoOpen && (
